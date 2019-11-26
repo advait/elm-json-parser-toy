@@ -1,16 +1,37 @@
 module MainTest exposing (..)
 
-import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, list, string)
+import Expect
+import Fuzz exposing (Fuzzer, string)
 import Main exposing (..)
+import String
 import Test exposing (..)
 
 
 suite : Test
 suite =
-    describe "jsonNullParser"
-        [ test "null" <| \_ -> Expect.equal (Just ( "", JsonNull )) (jsonNullParser "null")
-        , test "empty string" <| \_ -> Expect.equal Nothing (jsonNullParser "")
-        , fuzz string "returns any suffix if starts with null" <| \s -> Expect.equal (Just ( s, JsonNull )) (jsonNullParser ("null" ++ s))
-        , fuzz string "returns Nothing if not starts with null" <| \s -> Expect.equal Nothing (jsonNullParser ("nope" ++ s))
+    concat
+        [ describe "charP"
+            [ test "does not consume on mismatch" <| \_ -> Expect.equal Nothing (charP 'c' "hi")
+            , test "consumes on match" <| \_ -> Expect.equal (Just ( "", 'c' )) (charP 'c' "c")
+            , fuzz string "returns suffix on match" <| \s -> Expect.equal (Just ( s, 'c' )) (charP 'c' (String.cons 'c' s))
+            , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (charP 'c' (String.cons 'b' s))
+            ]
+        , describe
+            "seqParsers"
+            (let
+                p =
+                    seqParsers [ charP 'c', charP 'a' ]
+             in
+             [ test "does not consume on mismatch" <| \_ -> Expect.equal Nothing (p "hello")
+             , test "consumes on match" <| \_ -> Expect.notEqual Nothing (p "ca")
+             , fuzz string "returns suffix on match" <| \s -> Expect.equal (Just ( s, [ 'c', 'a' ] )) (p ("ca" ++ s))
+             , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (p ("d" ++ s))
+             ]
+            )
+        , describe "jsonNullParser"
+            [ test "null" <| \_ -> Expect.equal (Just ( "", JsonNull )) (jsonNullParser "null")
+            , test "empty string" <| \_ -> Expect.equal Nothing (jsonNullParser "")
+            , fuzz string "returns any suffix if starts with null" <| \s -> Expect.equal (Just ( s, JsonNull )) (jsonNullParser ("null" ++ s))
+            , fuzz string "returns Nothing if not starts with null" <| \s -> Expect.equal Nothing (jsonNullParser ("nope" ++ s))
+            ]
         ]

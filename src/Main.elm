@@ -1,8 +1,9 @@
 module Main exposing (..)
 
+import Debug
 import Dict exposing (Dict)
 import Maybe
-import String exposing (dropLeft, length, startsWith)
+import String
 
 
 {-| Represents a union of possible JSON Values
@@ -22,18 +23,86 @@ type alias Parser a =
     String -> Maybe ( String, a )
 
 
-{-| Try to consume the needs from the start of the haystack, maybe returning the remainder of the haystack.
+{-| Applies the transformation function f to the parsed result
 -}
-consume : String -> String -> Maybe String
-consume needle haystack =
-    case startsWith needle haystack of
-        True ->
-            Just (dropLeft (length needle) haystack)
+mapParsed : (a -> b) -> Maybe ( String, a ) -> Maybe ( String, b )
+mapParsed f res =
+    case res of
+        Nothing ->
+            Nothing
 
-        False ->
+        Just ( s, a ) ->
+            Just ( s, f a )
+
+
+{-| Applies the transformation function f to `Parser a` returning a `Parser b`
+-}
+mapParser : (a -> b) -> Parser a -> Parser b
+mapParser f pA s =
+    case pA s of
+        Just ( s_, a ) ->
+            Just ( s_, f a )
+
+        Nothing ->
             Nothing
 
 
+seqParsers : List (Parser a) -> Parser (List a)
+seqParsers parsers s =
+    case parsers of
+        -- Empty parsers does not match on anything
+        [] ->
+            Nothing
+
+        -- If we have a single parser, just wrap the result parsed in a list
+        [ p ] ->
+            p s |> mapParsed (\a -> [ a ])
+
+        -- If we have multiple parsers, recursively apply them
+        p :: ps ->
+            case p s of
+                Nothing ->
+                    Nothing
+
+                Just ( nextS, a ) ->
+                    case seqParsers ps nextS of
+                        Nothing ->
+                            Nothing
+
+                        Just ( finalS, ays ) ->
+                            Just ( finalS, a :: ays )
+
+
+{-| Returns a parser for the given Char c
+-}
+charP : Char -> Parser Char
+charP c s =
+    case String.uncons s of
+        Nothing ->
+            Nothing
+
+        Just ( c_, s_ ) ->
+            if c /= c_ then
+                Nothing
+
+            else
+                Just ( s_, c_ )
+
+
+{-| Returns a parser for the given String S
+-}
+stringP : String -> Parser String
+stringP needle =
+    let
+        charParsers =
+            String.toList needle |> List.map charP
+
+        parser =
+            seqParsers charParsers
+    in
+    mapParser String.fromList parser
+
+
 jsonNullParser : Parser JsonValue
-jsonNullParser s =
-    Maybe.map (\s_ -> ( s_, JsonNull )) (consume "null" s)
+jsonNullParser =
+    stringP "null" |> mapParser (always JsonNull)
