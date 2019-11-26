@@ -18,32 +18,46 @@ suite =
             ]
         , describe
             "seqParsers"
-            (let
+          <|
+            let
                 p =
                     seqParsers [ charP 'c', charP 'a' ]
-             in
-             [ test "does not consume on mismatch" <| \_ -> Expect.equal Nothing (p "hello")
-             , test "consumes on match" <| \_ -> Expect.notEqual Nothing (p "ca")
-             , fuzz string "returns suffix on match" <| \s -> Expect.equal (Just ( s, [ 'c', 'a' ] )) (p ("ca" ++ s))
-             , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (p ("d" ++ s))
-             ]
-            )
+            in
+            [ test "does not consume on mismatch" <| \_ -> Expect.equal Nothing (p "hello")
+            , test "consumes on match" <| \_ -> Expect.notEqual Nothing (p "ca")
+            , fuzz string "returns suffix on match" <| \s -> Expect.equal (Just ( s, [ 'c', 'a' ] )) (p ("ca" ++ s))
+            , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (p ("d" ++ s))
+            ]
         , describe
             "atLeastZero"
-            (let
+          <|
+            let
                 p =
                     zeroOrMore (charP 'c') |> mapParser String.fromList
-             in
-             [ test "succeeds on empty string" <| \_ -> Expect.equal (Just ( "", "" )) (p "")
-             , test "consumes a single char" <| \_ -> Expect.equal (Just ( "", "c" )) (p "c")
-             , test "consumes multiple chars" <| \_ -> Expect.equal (Just ( "", "ccc" )) (p "ccc")
-             , test "returns suffix" <| \_ -> Expect.equal (Just ( "d", "ccc" )) (p "cccd")
-             ]
-            )
+            in
+            [ test "succeeds on empty string" <| \_ -> Expect.equal (Just ( "", "" )) (p "")
+            , test "consumes a single char" <| \_ -> Expect.equal (Just ( "", "c" )) (p "c")
+            , test "consumes multiple chars" <| \_ -> Expect.equal (Just ( "", "ccc" )) (p "ccc")
+            , test "returns suffix" <| \_ -> Expect.equal (Just ( "d", "ccc" )) (p "cccd")
+            ]
         , describe "jsonNullParser"
             [ test "null" <| \_ -> Expect.equal (Just ( "", JsonNull )) (jsonNullParser "null")
             , test "empty string" <| \_ -> Expect.equal Nothing (jsonNullParser "")
             , fuzz string "returns any suffix if starts with null" <| \s -> Expect.equal (Just ( s, JsonNull )) (jsonNullParser ("null" ++ s))
             , fuzz string "returns Nothing if not starts with null" <| \s -> Expect.equal Nothing (jsonNullParser ("nope" ++ s))
+            ]
+        , describe "jsonStringParser"
+            [ test "digit should not match" <| \_ -> Expect.equal Nothing (jsonStringParser "1")
+            , test "empty string should not match" <| \_ -> Expect.equal Nothing (jsonStringParser "")
+            , test "empty JSON string should match" <| \_ -> Expect.equal (Just ( "", JsonString "" )) (jsonStringParser "\"\"")
+            , fuzz string
+                "arbitrary string bodies in quotes should match"
+              <|
+                \dirtyString ->
+                    let
+                        s =
+                            dirtyString |> String.filter (\c -> c /= '"')
+                    in
+                    Expect.equal (Just ( "", JsonString s )) (jsonStringParser ("\"" ++ s ++ "\""))
             ]
         ]

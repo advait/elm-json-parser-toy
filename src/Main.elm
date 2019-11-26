@@ -129,6 +129,41 @@ zeroOrMore p s =
             zeroOrMore p nextS |> mapParsed (\ays -> a :: ays)
 
 
+{-| Given a list of parsers, proxy to the first parser that matches.
+-}
+anyOneOf : List (Parser a) -> Parser a
+anyOneOf ps s =
+    case ps of
+        [] ->
+            Nothing
+
+        p :: remainingPs ->
+            case p s of
+                Nothing ->
+                    anyOneOf remainingPs s
+
+                match ->
+                    match
+
+
+{-| Parses the literal JSON null token.
+-}
 jsonNullParser : Parser JsonValue
 jsonNullParser =
     stringP "null" |> mapParser (always JsonNull)
+
+
+{-| Parses any JSON string.
+-}
+jsonStringParser : Parser JsonValue
+jsonStringParser =
+    let
+        -- Parse opening and closing quotes, but drops the quote
+        quoteParser =
+            charP '"' |> mapParser (\_ -> "")
+
+        -- Parses the body of the string
+        bodyParser =
+            exceptCharP '"' |> zeroOrMore |> mapParser String.fromList
+    in
+    seqParsers [ quoteParser, bodyParser, quoteParser ] |> mapParser String.concat |> mapParser JsonString
