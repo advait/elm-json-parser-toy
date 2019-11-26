@@ -23,7 +23,7 @@ type alias Parser a =
     String -> Maybe ( String, a )
 
 
-{-| Applies the transformation function f to the parsed result
+{-| Applies the transformation function f to the parsed result, keeping the suffix.
 -}
 mapParsed : (a -> b) -> Maybe ( String, a ) -> Maybe ( String, b )
 mapParsed f res =
@@ -58,19 +58,14 @@ seqParsers parsers s =
         [ p ] ->
             p s |> mapParsed (\a -> [ a ])
 
-        -- If we have multiple parsers, recursively apply them
+        -- If we have multiple parsers, recursively apply them in sequence
         p :: ps ->
             case p s of
                 Nothing ->
                     Nothing
 
                 Just ( nextS, a ) ->
-                    case seqParsers ps nextS of
-                        Nothing ->
-                            Nothing
-
-                        Just ( finalS, ays ) ->
-                            Just ( finalS, a :: ays )
+                    seqParsers ps nextS |> mapParsed (\ays -> a :: ays)
 
 
 {-| Returns a parser for the given Char c
