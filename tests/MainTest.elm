@@ -28,6 +28,18 @@ suite =
              , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (p ("d" ++ s))
              ]
             )
+        , describe
+            "atLeastZero"
+            (let
+                p =
+                    zeroOrMore (charP 'c') |> mapParser String.fromList
+             in
+             [ test "succeeds on empty string" <| \_ -> Expect.equal (Just ( "", "" )) (p "")
+             , test "consumes a single char" <| \_ -> Expect.equal (Just ( "", "c" )) (p "c")
+             , test "consumes multiple chars" <| \_ -> Expect.equal (Just ( "", "ccc" )) (p "ccc")
+             , test "returns suffix" <| \_ -> Expect.equal (Just ( "d", "ccc" )) (p "cccd")
+             ]
+            )
         , describe "jsonNullParser"
             [ test "null" <| \_ -> Expect.equal (Just ( "", JsonNull )) (jsonNullParser "null")
             , test "empty string" <| \_ -> Expect.equal Nothing (jsonNullParser "")

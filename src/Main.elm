@@ -47,6 +47,8 @@ mapParser f pA s =
             Nothing
 
 
+{-| Apply a List of parsers in sequence returning a list of the parsed results
+-}
 seqParsers : List (Parser a) -> Parser (List a)
 seqParsers parsers s =
     case parsers of
@@ -96,6 +98,35 @@ stringP needle =
             seqParsers charParsers
     in
     mapParser String.fromList parser
+
+
+{-| Returns a parser that matches the input for a single char that is not c
+-}
+exceptCharP : Char -> Parser Char
+exceptCharP c s =
+    case String.uncons s of
+        Nothing ->
+            Nothing
+
+        Just ( c_, s_ ) ->
+            if c == c_ then
+                Nothing
+
+            else
+                Just ( s_, c_ )
+
+
+{-| Given a parser, return a new parser that tries to repeatedly consume the input given the input parser until no
+more matches, returning the final suffix.
+-}
+zeroOrMore : Parser a -> Parser (List a)
+zeroOrMore p s =
+    case p s of
+        Nothing ->
+            Just ( s, [] )
+
+        Just ( nextS, a ) ->
+            zeroOrMore p nextS |> mapParsed (\ays -> a :: ays)
 
 
 jsonNullParser : Parser JsonValue
