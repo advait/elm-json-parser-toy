@@ -1,7 +1,8 @@
 module Main exposing (..)
 
 import Dict exposing (Dict)
-import String exposing (length, slice)
+import Maybe
+import String exposing (dropLeft, length, startsWith)
 
 
 {-| Represents a union of possible JSON Values
@@ -21,33 +22,18 @@ type alias Parser a =
     String -> Maybe ( String, a )
 
 
-{-| Given an integer N, tries to consume and return the first N characters from the input String, returning a tuple
-of the consumed characters and the remaining characters. If the input is less than N characters, then the whole input
-is consumed without errors
+{-| Try to consume the needs from the start of the haystack, maybe returning the remainder of the haystack.
 -}
-take : Int -> String -> ( String, String )
-take n s =
-    let
-        len =
-            length s
+consume : String -> String -> Maybe String
+consume needle haystack =
+    case startsWith needle haystack of
+        True ->
+            Just (dropLeft (length needle) haystack)
 
-        s1 =
-            slice 0 n s
-
-        s2 =
-            slice n (len - n) s
-    in
-    ( s1, s2 )
+        False ->
+            Nothing
 
 
 jsonNullParser : Parser JsonValue
 jsonNullParser s =
-    let
-        ( s1, s2 ) =
-            take 4 s
-    in
-    if s1 == "null" then
-        Just ( s2, JsonNull )
-
-    else
-        Nothing
+    Maybe.map (\s_ -> ( s_, JsonNull )) (consume "null" s)
