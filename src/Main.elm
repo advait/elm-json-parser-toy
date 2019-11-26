@@ -11,7 +11,7 @@ import String
 type JsonValue
     = JsonNull
     | JsonString String
-    | JsonNumber Float
+    | JsonNumber Float -- TODO(advait): Support decimals?
     | JsonArray (List JsonValue)
     | JsonObject (Dict String JsonValue)
 
@@ -129,6 +129,13 @@ zeroOrMore p s =
             zeroOrMore p nextS |> mapParsed (\ays -> a :: ays)
 
 
+{-| Given a parser, return a new parser that consumes the input one or more times.
+-}
+oneOrMore : Parser a -> Parser (List a)
+oneOrMore p =
+    seqParsers [ p |> mapParser (\a -> [ a ]), zeroOrMore p ] |> mapParser List.concat
+
+
 {-| Given a list of parsers, proxy to the first parser that matches.
 -}
 anyOneOf : List (Parser a) -> Parser a
@@ -167,3 +174,21 @@ jsonStringParser =
             exceptCharP '"' |> zeroOrMore |> mapParser String.fromList
     in
     seqParsers [ quoteParser, bodyParser, quoteParser ] |> mapParser String.concat |> mapParser JsonString
+
+
+{-| Parses JSON numbers. Note that decimals, negatives, and floating points are not supported.
+-}
+jsonNumberParser : Parser JsonValue
+jsonNumberParser =
+    let
+        singleDigitParser =
+            anyOneOf [ charP '0', charP '1', charP '2', charP '3', charP '4', charP '5', charP '6', charP '7', charP '8', charP '9' ]
+
+        stringToFloat s =
+            String.toFloat s |> Maybe.withDefault -999
+
+        -- Note that withDefault case should never happen
+        numberParser =
+            oneOrMore singleDigitParser |> mapParser String.fromList |> mapParser stringToFloat
+    in
+    numberParser |> mapParser JsonNumber

@@ -1,8 +1,10 @@
 module MainTest exposing (..)
 
+import Basics exposing (toFloat)
 import Expect
-import Fuzz exposing (Fuzzer, string)
+import Fuzz exposing (Fuzzer, intRange, string)
 import Main exposing (..)
+import Random
 import String
 import Test exposing (..)
 
@@ -59,5 +61,9 @@ suite =
                             dirtyString |> String.filter (\c -> c /= '"')
                     in
                     Expect.equal (Just ( "", JsonString s )) (jsonStringParser ("\"" ++ s ++ "\""))
+            ]
+        , describe "jsonNumberParser"
+            [ test "empty string" <| \_ -> Expect.equal Nothing (jsonNullParser "")
+            , fuzz (intRange 0 Random.maxInt) "valid integers" <| \i -> Expect.equal (Just ( "", JsonNumber (toFloat i) )) (jsonNumberParser (String.fromInt i))
             ]
         ]
