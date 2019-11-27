@@ -26,13 +26,13 @@ type alias Parser a =
 {-| Applies the transformation function f to the parsed result, keeping the suffix.
 -}
 mapParsed : (a -> b) -> Maybe ( String, a ) -> Maybe ( String, b )
-mapParsed f res =
-    case res of
+mapParsed f parseResult =
+    case parseResult of
         Nothing ->
             Nothing
 
-        Just ( s, a ) ->
-            Just ( s, f a )
+        Just ( tail, a ) ->
+            Just ( tail, f a )
 
 
 {-| Applies the transformation function f to `Parser a` returning a `Parser b`
@@ -40,8 +40,8 @@ mapParsed f res =
 mapParser : (a -> b) -> Parser a -> Parser b
 mapParser f pA s =
     case pA s of
-        Just ( s_, a ) ->
-            Just ( s_, f a )
+        Just ( tail, a ) ->
+            Just ( tail, f a )
 
         Nothing ->
             Nothing
@@ -66,8 +66,8 @@ seqParsers parsers s =
                 Nothing ->
                     Nothing
 
-                Just ( nextS, a ) ->
-                    seqParsers ps nextS |> mapParsed (\ays -> a :: ays)
+                Just ( tail, a ) ->
+                    seqParsers ps tail |> mapParsed (\ays -> a :: ays)
 
 
 {-| Returns a parser for the given Char c
@@ -78,12 +78,12 @@ charP c s =
         Nothing ->
             Nothing
 
-        Just ( c_, s_ ) ->
-            if c /= c_ then
+        Just ( head, tail ) ->
+            if c /= head then
                 Nothing
 
             else
-                Just ( s_, c_ )
+                Just ( tail, head )
 
 
 {-| Returns a parser for the given String S
@@ -97,7 +97,7 @@ stringP needle =
         parser =
             seqParsers charParsers
     in
-    mapParser String.fromList parser
+    parser |> mapParser String.fromList
 
 
 {-| Returns a parser that matches the input for a single char that is not c
@@ -108,12 +108,12 @@ exceptCharP c s =
         Nothing ->
             Nothing
 
-        Just ( c_, s_ ) ->
-            if c == c_ then
+        Just ( head, tail ) ->
+            if c == head then
                 Nothing
 
             else
-                Just ( s_, c_ )
+                Just ( tail, c )
 
 
 {-| Given a parser, return a new parser that tries to repeatedly consume the input given the input parser until no
@@ -125,8 +125,8 @@ zeroOrMore p s =
         Nothing ->
             Just ( s, [] )
 
-        Just ( nextS, a ) ->
-            zeroOrMore p nextS |> mapParsed (\ays -> a :: ays)
+        Just ( tail, a ) ->
+            zeroOrMore p tail |> mapParsed (\ays -> a :: ays)
 
 
 {-| Given a parser, return a new parser that consumes the input one or more times.
@@ -151,6 +151,20 @@ anyOneOf ps s =
 
                 match ->
                     match
+
+
+{-| Given a delimiter parser, and a core parser, parse delimited sequence returning a list of core items
+-}
+delimitedBy : Parser b -> Parser a -> Parser (List a)
+delimitedBy =
+    Debug.todo "Implement"
+
+
+{-| Given a parser, return a new parser that tolerates, consumes, and drops whitespace on either side
+-}
+wrappedWhitespace : Parser a -> Parser a
+wrappedWhitespace =
+    Debug.todo "Implement"
 
 
 {-| Parses the literal JSON null token.
@@ -184,10 +198,10 @@ jsonNumberParser =
         singleDigitParser =
             anyOneOf [ charP '0', charP '1', charP '2', charP '3', charP '4', charP '5', charP '6', charP '7', charP '8', charP '9' ]
 
+        -- Note that withDefault case should never happen
         stringToFloat s =
             String.toFloat s |> Maybe.withDefault -999
 
-        -- Note that withDefault case should never happen
         numberParser =
             oneOrMore singleDigitParser |> mapParser String.fromList |> mapParser stringToFloat
     in
