@@ -19,16 +19,26 @@ suite =
             , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (charP 'c' (String.cons 'b' s))
             ]
         , describe
+            "exceptCharP"
+          <|
+            let
+                p1 =
+                    exceptCharP '"'
+            in
+            [ test "consumes on mismatch" <| \_ -> Expect.equal (Just ( "", 'c' )) (p1 "c")
+            , test "does not consume on match" <| \_ -> Expect.equal Nothing (p1 "\"")
+            ]
+        , describe
             "seqParsers"
           <|
             let
-                p =
+                p1 =
                     seqParsers [ charP 'c', charP 'a' ]
             in
-            [ test "does not consume on mismatch" <| \_ -> Expect.equal Nothing (p "hello")
-            , test "consumes on match" <| \_ -> Expect.notEqual Nothing (p "ca")
-            , fuzz string "returns suffix on match" <| \s -> Expect.equal (Just ( s, [ 'c', 'a' ] )) (p ("ca" ++ s))
-            , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (p ("d" ++ s))
+            [ test "does not consume on mismatch" <| \_ -> Expect.equal Nothing (p1 "hello")
+            , test "consumes on match" <| \_ -> Expect.notEqual Nothing (p1 "ca")
+            , fuzz string "returns suffix on match" <| \s -> Expect.equal (Just ( s, [ 'c', 'a' ] )) (p1 ("ca" ++ s))
+            , fuzz string "returns Nothing regardless of suffix" <| \s -> Expect.equal Nothing (p1 ("d" ++ s))
             ]
         , describe
             "atLeastZero"
@@ -50,6 +60,7 @@ suite =
             ]
         , describe "jsonStringParser"
             [ test "digit should not match" <| \_ -> Expect.equal Nothing (jsonStringParser "1")
+            , test "space should match" <| \_ -> Expect.equal (Just ( "", JsonString " " )) (jsonStringParser "\" \"")
             , test "empty string should not match" <| \_ -> Expect.equal Nothing (jsonStringParser "")
             , test "empty JSON string should match" <| \_ -> Expect.equal (Just ( "", JsonString "" )) (jsonStringParser "\"\"")
             , fuzz string

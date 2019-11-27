@@ -4,12 +4,14 @@ import Debug
 import Dict exposing (Dict)
 import Maybe
 import String
+import Tuple
 
 
 {-| Represents a union of possible JSON Values
 -}
 type JsonValue
     = JsonNull
+    | JsonBool Bool
     | JsonString String
     | JsonNumber Float -- TODO(advait): Support decimals?
     | JsonArray (List JsonValue)
@@ -113,7 +115,7 @@ exceptCharP c s =
                 Nothing
 
             else
-                Just ( tail, c )
+                Just ( tail, head )
 
 
 {-| Given a parser, return a new parser that tries to repeatedly consume the input given the input parser until no
@@ -160,11 +162,61 @@ delimitedBy =
     Debug.todo "Implement"
 
 
-{-| Given a parser, return a new parser that tolerates, consumes, and drops whitespace on either side
+{-| Runs Parser a, from the output, runs Parser b, discarding the output of a and returning the result of Parser b.
 -}
-wrappedWhitespace : Parser a -> Parser a
-wrappedWhitespace =
-    Debug.todo "Implement"
+discard : Parser a -> Parser b -> Parser b
+discard pA pB s =
+    case pA s of
+        Nothing ->
+            Nothing
+
+        Just ( tail, _ ) ->
+            pB tail
+
+
+{-| Runs Parser a, from the output, runs Parser b, returning the tail of Parser b but returning the parsed value of
+Parser a
+-}
+discardRight : Parser a -> Parser b -> Parser a
+discardRight pA pB s =
+    case pA s of
+        Nothing ->
+            Nothing
+
+        Just ( tail, ret ) ->
+            pB tail |> mapParsed (always ret)
+
+
+{-| Parses zero or more characters of whitespace.
+-}
+wsP : Parser ()
+wsP =
+    anyOneOf [ charP ' ', charP '\n', charP '\t' ] |> zeroOrMore |> mapParser (\_ -> ())
+
+
+{-| Given a Parser, return a new Parser that first consumes all whitespace, then defers to the provided parser
+-}
+wsLeft : Parser a -> Parser a
+wsLeft parser s =
+    case wsP s of
+        Nothing ->
+            Nothing
+
+        Just ( tail, _ ) ->
+            parser tail
+
+
+{-| Given a Parser, return a new Parser that defers to the provided parser, then consumes all whitespace,
+finally, returning the original Parser's value.
+-}
+wsRight : Parser a -> Parser a
+wsRight parser s =
+    case parser s of
+        Nothing ->
+            Nothing
+
+        Just ( tail, ret ) ->
+            wsP tail |> mapParsed (always ret)
 
 
 {-| Parses the literal JSON null token.
@@ -206,3 +258,17 @@ jsonNumberParser =
             oneOrMore singleDigitParser |> mapParser String.fromList |> mapParser stringToFloat
     in
     numberParser |> mapParser JsonNumber
+
+
+{-| Parser for any JsonValue
+-}
+jsonValueParser : Parser JsonValue
+jsonValueParser =
+    anyOneOf [ jsonNumberParser, jsonStringParser, jsonNumberParser ]
+
+
+{-| Final exported parser that returns parsed JSON.
+-}
+parseJson : String -> Maybe JsonValue
+parseJson s =
+    (wsLeft jsonValueParser |> wsRight) s |> Maybe.map Tuple.second
