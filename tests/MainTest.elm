@@ -1,6 +1,7 @@
 module MainTest exposing (..)
 
 import Basics exposing (toFloat)
+import Dict
 import Expect
 import Fuzz exposing (Fuzzer, intRange, string)
 import Main exposing (..)
@@ -96,5 +97,12 @@ suite =
             , test "single element" <| \_ -> Expect.equal (Just ( "", JsonArray [ JsonNull ] )) (jsonArrayParser "[ null ]")
             , test "multiple elements" <| \_ -> Expect.equal (Just ( "", JsonArray [ JsonNull, JsonNumber 1 ] )) (jsonArrayParser "[ null, 1 ]")
             , test "nested arrays" <| \_ -> Expect.equal (Just ( "", JsonArray [ JsonArray [ JsonNull ], JsonNumber 1 ] )) (jsonArrayParser "[ [null], 1 ]")
+            ]
+        , describe "jsonObjectParser"
+            [ test "empty string" <| \_ -> Expect.equal Nothing (jsonArrayParser "")
+            , test "empty object" <| \_ -> Expect.equal (Just ( "", JsonObject Dict.empty )) (jsonObjectParser "{}")
+            , test "empty object with whitespace" <| \_ -> Expect.equal (Just ( "", JsonObject Dict.empty )) (jsonObjectParser "{ \t\n }")
+            , test "single element" <| \_ -> Expect.equal (Just ( "", JsonObject (Dict.fromList [ ( "hello", JsonString "world" ) ]) )) (jsonObjectParser "{ \"hello\" : \"world\" }")
+            , test "nested objects" <| \_ -> Expect.equal (Just ( "", JsonObject (Dict.fromList [ ( "hello", JsonObject (Dict.fromList [ ( "world", JsonNull ) ]) ) ]) )) (jsonObjectParser "{ \"hello\": {\"world\": null} }")
             ]
         ]

@@ -219,6 +219,11 @@ discardRight pA pB s =
             pB tail |> mapParsed (always ret)
 
 
+enclosedBy : Parser a -> Parser b -> Parser c -> Parser b
+enclosedBy open body close =
+    discardRight (discard open body) close
+
+
 {-| Parses zero or more characters of whitespace.
 -}
 wsP : Parser ()
@@ -272,20 +277,26 @@ jsonBoolParser =
     anyOneOf [ trueParser, falseParser ]
 
 
-{-| Parses any JSON string.
+{-| Parses strings up until a double quote is reached.
 -}
-jsonStringParser : Parser JsonValue
-jsonStringParser =
+stringLiteralParser : Parser String
+stringLiteralParser =
     let
         -- Parse opening and closing quotes, but drops the quote
         quoteParser =
             charP '"' |> mapParser (\_ -> "")
 
-        -- Parses the body of the string
-        bodyParser =
+        stringBodyParser =
             exceptCharP '"' |> zeroOrMore |> mapParser String.fromList
     in
-    seqParsers [ quoteParser, bodyParser, quoteParser ] |> mapParser String.concat |> mapParser JsonString
+    seqParsers [ quoteParser, stringBodyParser, quoteParser ] |> mapParser String.concat
+
+
+{-| Parses any JSON string.
+-}
+jsonStringParser : Parser JsonValue
+jsonStringParser =
+    stringLiteralParser |> mapParser JsonString
 
 
 {-| Parses JSON numbers. Note that decimals, negatives, and floating points are not supported.
@@ -310,36 +321,72 @@ jsonNumberParser =
 -}
 jsonArrayParser : Parser JsonValue
 jsonArrayParser =
-    -- Elm does not allow for values to be recursively defined at compile time. Here we must insert a "lazy"
-    -- recursive reference that evaluates at runtime, breaking the recursive compile time chain. This is why this
-    -- function returns a lambda.
-    -- See: https://github.com/elm/compiler/blob/master/hints/bad-recursion.md
-    \s ->
-        let
-            openBracket =
-                charP '[' |> wsRight
+    let
+        openBracket =
+            charP '[' |> wsRight
 
-            delimiter =
-                wsLeft (charP ',') |> wsRight
+        delimiter =
+            wsLeft (charP ',') |> wsRight
 
-            closeBacket =
-                wsLeft (charP ']')
+        closeBacket =
+            wsLeft (charP ']')
 
-            lazy : (() -> a) -> a
-            lazy f =
-                f ()
+        elementsParser =
+            delimitedBy delimiter jsonValueParser
+    in
+    enclosedBy openBracket elementsParser closeBacket |> mapParser JsonArray
 
-            elementsParser =
-                delimitedBy delimiter jsonValueParser
-        in
-        (discardRight (discard openBracket elementsParser) closeBacket |> mapParser JsonArray) s
+
+jsonObjectParser : Parser JsonValue
+jsonObjectParser =
+    let
+        openBracket =
+            charP '{' |> wsRight
+
+        delimiter =
+            wsLeft (charP ',') |> wsRight
+
+        closeBacket =
+            wsLeft (charP '}')
+
+        colonParser =
+            wsLeft (charP ':') |> wsRight
+
+        keyParser =
+            discardRight stringLiteralParser colonParser
+
+        -- TODO(advait): This is craving a flatMap-like operation where you can chain multiple parsers together
+        -- where *both* the output string and the output value of parser 1 feed into parser 2.
+        elementParser : Parser ( String, JsonValue )
+        elementParser s =
+            case keyParser s of
+                Nothing ->
+                    Nothing
+
+                Just ( tail1, key ) ->
+                    case jsonValueParser tail1 of
+                        Nothing ->
+                            Nothing
+
+                        Just ( tail2, value ) ->
+                            Just ( tail2, ( key, value ) )
+
+        elementsParser =
+            delimitedBy delimiter elementParser
+    in
+    enclosedBy openBracket elementsParser closeBacket |> mapParser Dict.fromList |> mapParser JsonObject
 
 
 {-| Parser for any JsonValue
 -}
 jsonValueParser : Parser JsonValue
 jsonValueParser =
-    anyOneOf [ jsonNullParser, jsonBoolParser, jsonStringParser, jsonNumberParser, jsonArrayParser ]
+    -- Elm does not allow for values to be recursively defined at compile time. Here we must insert a "lazy"
+    -- recursive reference that evaluates at runtime, breaking the recursive compile time chain. This is why this
+    -- function returns a lambda.
+    -- See: https://github.com/elm/compiler/blob/master/hints/bad-recursion.md
+    \s ->
+        anyOneOf [ jsonNullParser, jsonBoolParser, jsonStringParser, jsonNumberParser, jsonArrayParser, jsonObjectParser ] s
 
 
 {-| Final exported parser that returns parsed JSON.
