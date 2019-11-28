@@ -67,6 +67,13 @@ seqParsers parsers s =
                     seqParsers ps tail |> mapParsed (\ays -> a :: ays)
 
 
+{-| Returns a parser that always returns ret without ever consuming the input.
+-}
+alwaysP : a -> Parser a
+alwaysP ret s =
+    Just ( s, ret )
+
+
 {-| Returns a parser for the given Char c
 -}
 charP : Char -> Parser Char
@@ -95,6 +102,19 @@ stringP needle =
             seqParsers charParsers
     in
     parser |> mapParser String.fromList
+
+
+{-| Given a Parser, return a new parser that is the inverse of the first. If the first matches, the returned does not
+match. If the first does not match, the returned matches with (). The input string is always returned.
+-}
+notC : Parser a -> Parser ()
+notC p s =
+    case p s of
+        Nothing ->
+            Just ( s, () )
+
+        Just ( _, _ ) ->
+            Nothing
 
 
 {-| Returns a parser that matches the input for a single char that is not c
@@ -153,8 +173,25 @@ anyOneOf ps s =
 {-| Given a delimiter parser, and a core parser, parse delimited sequence returning a list of core items
 -}
 delimitedBy : Parser b -> Parser a -> Parser (List a)
-delimitedBy pB pA s =
-    Debug.todo "hello"
+delimitedBy delimiterP elementP =
+    let
+        -- Matches the head of a multi-element sequence.
+        headElementParser =
+            elementP |> mapParser (\a -> [ a ])
+
+        -- Matches the tail of a multi-element sequence (sequence of delimiter+element pairs).
+        tailElementsParser =
+            discard delimiterP elementP |> zeroOrMore
+
+        -- Stitches the headElementParser and tailElementParser.
+        multiElementParser =
+            seqParsers [ headElementParser, tailElementsParser ] |> mapParser List.concat
+
+        -- Matches empty sequences.
+        fallbackParser =
+            alwaysP []
+    in
+    anyOneOf [ multiElementParser, fallbackParser ]
 
 
 {-| Runs Parser a, from the output, runs Parser b, discarding the output of a and returning the result of Parser b.
@@ -269,11 +306,40 @@ jsonNumberParser =
     numberParser |> mapParser JsonNumber
 
 
+{-| Parser JSON Arrays.
+-}
+jsonArrayParser : Parser JsonValue
+jsonArrayParser =
+    -- Elm does not allow for values to be recursively defined at compile time. Here we must insert a "lazy"
+    -- recursive reference that evaluates at runtime, breaking the recursive compile time chain. This is why this
+    -- function returns a lambda.
+    -- See: https://github.com/elm/compiler/blob/master/hints/bad-recursion.md
+    \s ->
+        let
+            openBracket =
+                charP '[' |> wsRight
+
+            delimiter =
+                wsLeft (charP ',') |> wsRight
+
+            closeBacket =
+                wsLeft (charP ']')
+
+            lazy : (() -> a) -> a
+            lazy f =
+                f ()
+
+            elementsParser =
+                delimitedBy delimiter jsonValueParser
+        in
+        (discardRight (discard openBracket elementsParser) closeBacket |> mapParser JsonArray) s
+
+
 {-| Parser for any JsonValue
 -}
 jsonValueParser : Parser JsonValue
 jsonValueParser =
-    anyOneOf [ jsonNullParser, jsonBoolParser, jsonStringParser, jsonNumberParser ]
+    anyOneOf [ jsonNullParser, jsonBoolParser, jsonStringParser, jsonNumberParser, jsonArrayParser ]
 
 
 {-| Final exported parser that returns parsed JSON.

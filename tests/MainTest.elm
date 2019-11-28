@@ -44,13 +44,25 @@ suite =
             "atLeastZero"
           <|
             let
-                p =
+                cParser =
                     zeroOrMore (charP 'c') |> mapParser String.fromList
             in
-            [ test "succeeds on empty string" <| \_ -> Expect.equal (Just ( "", "" )) (p "")
-            , test "consumes a single char" <| \_ -> Expect.equal (Just ( "", "c" )) (p "c")
-            , test "consumes multiple chars" <| \_ -> Expect.equal (Just ( "", "ccc" )) (p "ccc")
-            , test "returns suffix" <| \_ -> Expect.equal (Just ( "d", "ccc" )) (p "cccd")
+            [ test "succeeds on empty string" <| \_ -> Expect.equal (Just ( "", "" )) (cParser "")
+            , test "consumes a single char" <| \_ -> Expect.equal (Just ( "", "c" )) (cParser "c")
+            , test "consumes multiple chars" <| \_ -> Expect.equal (Just ( "", "ccc" )) (cParser "ccc")
+            , test "returns suffix" <| \_ -> Expect.equal (Just ( "d", "ccc" )) (cParser "cccd")
+            ]
+        , describe
+            "delimitedBy"
+          <|
+            let
+                p =
+                    delimitedBy (charP ',') (charP 'c')
+            in
+            [ test "succeeds on empty string" <| \_ -> Expect.equal (Just ( "", [] )) (p "")
+            , test "consumes a single char" <| \_ -> Expect.equal (Just ( "", [ 'c' ] )) (p "c")
+            , test "consumes multiple chars" <| \_ -> Expect.equal (Just ( "cc", [ 'c' ] )) (p "ccc")
+            , test "returns suffix" <| \_ -> Expect.equal (Just ( "", [ 'c', 'c' ] )) (p "c,c")
             ]
         , describe "jsonNullParser"
             [ test "null" <| \_ -> Expect.equal (Just ( "", JsonNull )) (jsonNullParser "null")
@@ -76,5 +88,13 @@ suite =
         , describe "jsonNumberParser"
             [ test "empty string" <| \_ -> Expect.equal Nothing (jsonNullParser "")
             , fuzz (intRange 0 Random.maxInt) "valid integers" <| \i -> Expect.equal (Just ( "", JsonNumber (toFloat i) )) (jsonNumberParser (String.fromInt i))
+            ]
+        , describe "jsonArrayParser"
+            [ test "empty string" <| \_ -> Expect.equal Nothing (jsonArrayParser "")
+            , test "empty array" <| \_ -> Expect.equal (Just ( "", JsonArray [] )) (jsonArrayParser "[]")
+            , test "empty array with whitespace" <| \_ -> Expect.equal (Just ( "", JsonArray [] )) (jsonArrayParser "[ \t\n ]")
+            , test "single element" <| \_ -> Expect.equal (Just ( "", JsonArray [ JsonNull ] )) (jsonArrayParser "[ null ]")
+            , test "multiple elements" <| \_ -> Expect.equal (Just ( "", JsonArray [ JsonNull, JsonNumber 1 ] )) (jsonArrayParser "[ null, 1 ]")
+            , test "nested arrays" <| \_ -> Expect.equal (Just ( "", JsonArray [ JsonArray [ JsonNull ], JsonNumber 1 ] )) (jsonArrayParser "[ [null], 1 ]")
             ]
         ]
