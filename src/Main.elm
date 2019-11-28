@@ -41,12 +41,7 @@ mapParsed f parseResult =
 -}
 mapParser : (a -> b) -> Parser a -> Parser b
 mapParser f pA s =
-    case pA s of
-        Just ( tail, a ) ->
-            Just ( tail, f a )
-
-        Nothing ->
-            Nothing
+    pA s |> mapParsed f
 
 
 {-| Apply a List of parsers in sequence returning a list of the parsed results
@@ -158,8 +153,8 @@ anyOneOf ps s =
 {-| Given a delimiter parser, and a core parser, parse delimited sequence returning a list of core items
 -}
 delimitedBy : Parser b -> Parser a -> Parser (List a)
-delimitedBy =
-    Debug.todo "Implement"
+delimitedBy pB pA s =
+    Debug.todo "hello"
 
 
 {-| Runs Parser a, from the output, runs Parser b, discarding the output of a and returning the result of Parser b.
@@ -226,6 +221,20 @@ jsonNullParser =
     stringP "null" |> mapParser (always JsonNull)
 
 
+{-| Parses the literal JSON true and false booleans.
+-}
+jsonBoolParser : Parser JsonValue
+jsonBoolParser =
+    let
+        trueParser =
+            stringP "true" |> mapParser (always (JsonBool True))
+
+        falseParser =
+            stringP "false" |> mapParser (always (JsonBool False))
+    in
+    anyOneOf [ trueParser, falseParser ]
+
+
 {-| Parses any JSON string.
 -}
 jsonStringParser : Parser JsonValue
@@ -264,7 +273,7 @@ jsonNumberParser =
 -}
 jsonValueParser : Parser JsonValue
 jsonValueParser =
-    anyOneOf [ jsonNumberParser, jsonStringParser, jsonNumberParser ]
+    anyOneOf [ jsonNullParser, jsonBoolParser, jsonStringParser, jsonNumberParser ]
 
 
 {-| Final exported parser that returns parsed JSON.
