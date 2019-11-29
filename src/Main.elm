@@ -4,7 +4,6 @@ import Debug
 import Dict exposing (Dict)
 import Maybe
 import String
-import Tuple
 
 
 {-| Represents a union of possible JSON Values.
@@ -415,5 +414,10 @@ toString jsonValue =
 {-| Final exported parser that returns parsed JSON.
 -}
 parseJson : String -> Maybe JsonValue
-parseJson s =
-    (jsonValueParser |> enclosedByWhitespace) s |> Maybe.map Tuple.second
+parseJson input =
+    case (jsonValueParser |> enclosedByWhitespace) input of
+        Just ( "", output ) ->
+            Just output
+
+        _ ->
+            Nothing
