@@ -165,7 +165,7 @@ delimitedBy delimiterP elementP =
 
         -- Matches the tail of a multi-element sequence (sequence of delimiter+element pairs).
         tailElementsParser =
-            discard delimiterP elementP |> zeroOrMore
+            enclosedBy delimiterP elementP nullP |> zeroOrMore
 
         -- Stitches the headElementParser and tailElementParser.
         multiElementParser =
@@ -178,43 +178,34 @@ delimitedBy delimiterP elementP =
     anyOneOf [ multiElementParser, fallbackParser ]
 
 
-{-| Runs Parser a, from the output, runs Parser b, discarding the output of a and returning the result of Parser b.
--}
-discard : Parser a -> Parser b -> Parser b
-discard parserA parserB input =
-    case parserA input of
-        Nothing ->
-            Nothing
-
-        Just ( tail, _ ) ->
-            parserB tail
-
-
-{-| Runs Parser a, from the output, runs Parser b, returning the tail of Parser b but returning the parsed value of
-Parser a.
--}
-discardRight : Parser a -> Parser b -> Parser a
-discardRight parserA parserB input =
-    case parserA input of
-        Nothing ->
-            Nothing
-
-        Just ( tail, ret ) ->
-            parserB tail |> mapParsed (always ret)
-
-
 {-| Returns a parser that's enclosed by a and c, discarding them, and returning the value of b.
+TODO(advait): Clean this up. See if there's a way to collapse the nested chaining.
 -}
 enclosedBy : Parser a -> Parser b -> Parser c -> Parser b
-enclosedBy open body close =
-    discardRight (discard open body) close
+enclosedBy open body close input =
+    case open input of
+        Nothing ->
+            Nothing
+
+        Just ( input2, _ ) ->
+            case body input2 of
+                Nothing ->
+                    Nothing
+
+                Just ( input3, ret ) ->
+                    case close input3 of
+                        Nothing ->
+                            Nothing
+
+                        Just ( input4, _ ) ->
+                            Just ( input4, ret )
 
 
 {-| Parses zero or more characters of whitespace.
 -}
-wsP : Parser ()
+wsP : Parser String
 wsP =
-    anyOneOf [ charP ' ', charP '\n', charP '\t' ] |> zeroOrMore |> mapParser (always ())
+    anyOneOf [ charP ' ', charP '\n', charP '\t' ] |> zeroOrMore |> mapParser String.fromList
 
 
 {-| Wraps a parser, consuming and discard whitespace on either side.
@@ -222,31 +213,6 @@ wsP =
 enclosedByWhitespace : Parser b -> Parser b
 enclosedByWhitespace parser =
     enclosedBy wsP parser wsP
-
-
-{-| Given a Parser, return a new Parser that first consumes all whitespace, then defers to the provided parser
--}
-wsLeft : Parser a -> Parser a
-wsLeft parser s =
-    case wsP s of
-        Nothing ->
-            Nothing
-
-        Just ( tail, _ ) ->
-            parser tail
-
-
-{-| Given a Parser, return a new Parser that defers to the provided parser, then consumes all whitespace,
-finally, returning the original Parser's value.
--}
-wsRight : Parser a -> Parser a
-wsRight parser s =
-    case parser s of
-        Nothing ->
-            Nothing
-
-        Just ( tail, ret ) ->
-            wsP tail |> mapParsed (always ret)
 
 
 {-| Parses the literal JSON null token.
@@ -313,13 +279,13 @@ jsonArrayParser : Parser JsonValue
 jsonArrayParser =
     let
         openBracket =
-            charP '[' |> wsRight
+            enclosedBy nullP (charP '[') wsP
 
         delimiter =
-            charP ',' |> enclosedByWhitespace
+            enclosedByWhitespace (charP ',')
 
         closeBacket =
-            wsLeft <| charP ']'
+            enclosedBy wsP (charP ']') nullP
 
         elementsParser =
             delimitedBy delimiter jsonValueParser
@@ -331,19 +297,19 @@ jsonObjectParser : Parser JsonValue
 jsonObjectParser =
     let
         openBracket =
-            charP '{' |> wsRight
+            enclosedBy nullP (charP '{') wsP
 
         delimiter =
-            charP ',' |> enclosedByWhitespace
+            enclosedByWhitespace (charP ',')
 
         closeBacket =
-            wsLeft <| charP '}'
+            enclosedBy wsP (charP '}') nullP
 
         colonParser =
-            charP ':' |> enclosedByWhitespace
+            enclosedByWhitespace (charP ':')
 
         keyParser =
-            discardRight stringLiteralParser colonParser
+            enclosedBy nullP stringLiteralParser colonParser
 
         -- TODO(advait): This is craving a flatMap-like operation where you can chain multiple parsers together
         -- where *both* the output string and the output value of parser 1 feed into parser 2.
@@ -367,7 +333,7 @@ jsonObjectParser =
     enclosedBy openBracket elementsParser closeBacket |> mapParser Dict.fromList |> mapParser JsonObject
 
 
-{-| Parser for any JsonValue
+{-| Parser for any JsonValue.
 -}
 jsonValueParser : Parser JsonValue
 jsonValueParser =
