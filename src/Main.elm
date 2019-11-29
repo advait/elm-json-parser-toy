@@ -102,7 +102,7 @@ stringP needle =
     seqParsers charParsers |> mapParser String.fromList
 
 
-{-| Returns a parser that matches the input for a single char that is not c
+{-| Returns a parser that matches the input for a single char that is not c.
 -}
 exceptCharP : Char -> Parser Char
 exceptCharP char input =
@@ -269,7 +269,18 @@ jsonNumberParser : Parser JsonValue
 jsonNumberParser =
     let
         singleDigitParser =
-            anyOneOf [ charP '0', charP '1', charP '2', charP '3', charP '4', charP '5', charP '6', charP '7', charP '8', charP '9' ]
+            anyOneOf
+                [ charP '0'
+                , charP '1'
+                , charP '2'
+                , charP '3'
+                , charP '4'
+                , charP '5'
+                , charP '6'
+                , charP '7'
+                , charP '8'
+                , charP '9'
+                ]
 
         -- Note that withDefault case should never happen
         stringToFloat s =
@@ -360,6 +371,45 @@ jsonValueParser =
             , jsonObjectParser
             ]
             input
+
+
+{-| Writes a parsed JsonValue back to a JsonString
+-}
+toString : JsonValue -> String
+toString jsonValue =
+    case jsonValue of
+        JsonNull ->
+            "null"
+
+        JsonUndefined ->
+            "undefined"
+
+        JsonBool True ->
+            "true"
+
+        JsonBool False ->
+            "false"
+
+        JsonNumber n ->
+            String.fromFloat n
+
+        JsonString s ->
+            -- TODO(advait): Support string escaping here.
+            "\"" ++ s ++ "\""
+
+        JsonArray values ->
+            "[" ++ (values |> List.map toString |> String.join ",") ++ "]"
+
+        JsonObject obj ->
+            let
+                pairToString pair =
+                    let
+                        ( key, value ) =
+                            pair
+                    in
+                    "\"" ++ key ++ "\":" ++ toString value
+            in
+            "{" ++ (obj |> Dict.toList |> List.map pairToString |> String.join ",") ++ "}"
 
 
 {-| Final exported parser that returns parsed JSON.
