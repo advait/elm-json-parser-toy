@@ -7,10 +7,11 @@ import String
 import Tuple
 
 
-{-| Represents a union of possible JSON Values
+{-| Represents a union of possible JSON Values.
 -}
 type JsonValue
     = JsonNull
+    | JsonUndefined
     | JsonBool Bool
     | JsonString String
     | JsonNumber Float -- TODO(advait): Support decimals?
@@ -222,6 +223,13 @@ jsonNullParser =
     stringP "null" |> mapParser (always JsonNull)
 
 
+{-| Parses the literal JSON undefined token.
+-}
+jsonUndefinedParser : Parser JsonValue
+jsonUndefinedParser =
+    stringP "undefined" |> mapParser (always JsonUndefined)
+
+
 {-| Parses the literal JSON true and false booleans.
 -}
 jsonBoolParser : Parser JsonValue
@@ -341,8 +349,17 @@ jsonValueParser =
     -- recursive reference that evaluates at runtime, breaking the recursive compile time chain. This is why this
     -- function returns a lambda.
     -- See: https://github.com/elm/compiler/blob/master/hints/bad-recursion.md
-    \s ->
-        anyOneOf [ jsonNullParser, jsonBoolParser, jsonStringParser, jsonNumberParser, jsonArrayParser, jsonObjectParser ] s
+    \input ->
+        anyOneOf
+            [ jsonNullParser
+            , jsonUndefinedParser
+            , jsonBoolParser
+            , jsonStringParser
+            , jsonNumberParser
+            , jsonArrayParser
+            , jsonObjectParser
+            ]
+            input
 
 
 {-| Final exported parser that returns parsed JSON.
